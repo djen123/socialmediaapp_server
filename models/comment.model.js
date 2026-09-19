@@ -1,23 +1,26 @@
-import mongoose from "mongoose";
-import User from "./user.model.js";
-import Post from "./post.model.js";
+import mongoose from "mongoose"
+import User from './user.model.js'
+import Post from './post.model.js'
 
-const CommentSchema = new mongoose.Schema({
-   content:{
-    type:String,
-    required:true
-   },
-   author:{
-    type:mongoose.Schema.Types.ObjectId,
-    ref:User,
-    requried:true
-   },
-   post:{
-    type:mongoose.Schema.Types.ObjectId,
-    ref:Post,
-    required:true
-   }
-});
+const commentSchema = new mongoose.Schema({
+  content: {
+    type: String,
+    required: true
+  },
+  author: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: User,
+    required: true
+  },
+  post: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: Post,
+    required: true
+  }
+}, {
+  timestamps: true
+})
 
-const Comment = mongoose.model("Comment", CommentSchema);
-export default Comment;
+const Comment = mongoose.model('Comment', commentSchema)
+
+export default Comment

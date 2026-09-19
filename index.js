@@ -1,83 +1,66 @@
-import express from "express";
-import dotenv from "dotenv";
-import mongoose from "mongoose";
-import cors from "cors";
-import cookieParser from "cookie-parser";
+import express from 'express'
+import mongoose from 'mongoose'
+import cors from 'cors'
+import dotenv from 'dotenv'
+dotenv.config()
+import userRoutes from './routes/user.routes.js'
+import postRoutes from './routes/post.routes.js'
+import commentRoutes from './routes/comment.routes.js'
+import companyRoutes from './routes/company.routes.js'
+import universityRoutes from './routes/univeristy.routes.js'
+import networkRoutes from './routes/network.routes.js'
+import cookieParser from 'cookie-parser'
 
-import userRoutes from "./routes/user.routes.js";
-import postRoutes from "./routes/post.route.js"
-import commentRoutes from "./routes/comment.route.js"
+const { PORT, MONGODB_URL, CLIENT_ORIGIN } = process.env
 
-dotenv.config();
+const app = express()
 
-const { PORT, MONGODB_URL } = process.env;
+app.use(cors({
+  origin: CLIENT_ORIGIN,
+  credentials: true
+}))
+app.use(cookieParser())
+app.use(express.urlencoded())
+app.use(express.json())
 
-const app = express();
+app.use('/api/users', userRoutes)
+app.use('/api/posts', postRoutes)
+app.use('/api/comments', commentRoutes)
+app.use('/api/companies', companyRoutes)
+app.use('/api/universities', universityRoutes)
+app.use('/api/network', networkRoutes)
 
-// CORS — allow frontend (5173) to access backend (3000)
-app.use(
-  cors({
-    origin: "http://localhost:5173",
-    credentials: true
-  })
-);
-
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-
-// Routes
-app.use("/api/users", userRoutes);
-app.use("/api/posts",postRoutes);
-app.use("/api/comments",commentRoutes)
-
-
-// Root route
-app.get("/", (req, res) => {
+app.get('/', (req, res) => {
   res.json({
-    app: "full stack app",
-    date: new Date().toLocaleString()
-  });
-});
+    app: 'Full Stack App',
+    now: new Date().toLocaleString()
+  })
+})
 
-// Database connection
-await mongoose.connect(MONGODB_URL);
-console.log("Database connected");
+await mongoose.connect(MONGODB_URL)
+console.log('Database connection established ✅')
 
-// Start server
 app.listen(PORT, () => {
-  console.log(`Server is listening at ${PORT}`);
-});
+  console.log(`FullStackApp server is running on http://localhost:${process.env.PORT
+}`)
+})
 
-/**
- Token storage strategies:
-    localstorage : store the token in the browser's local storage.simple but vulnerable to xss attacks
-    Cookies : store the token in an HTTP-only cookie. Secure against XSS attacks but can be vulnerable to CSRF.Javascript 
-    cannot steal the token from HTTP_only cookie
-        - npm cookie-parser // package to add cookie to req.cookies
-        - setup ways to 
-credentials to true to cors will accept cookie as header by browser
+/*
+  # Token Storage Strategies
+    1. Local Storage: Store the token in the browser's local storage. This is simple but vulnerable to XSS (Cross site scripting) attacks.
+    2. Cookies: Store the token in an HTTP-only cookie. This is more secure against XSS attacks. JS cannot steal the token from an HTTP-only cookie.
 
-
-cookies setup to send and receive cookies from server to client and vice versa
-server 
-    - start with res.cookie('token',token) to set the token ,
-    - res.clearCookie('token'):clear the token
-    - add credentials true to cors configuration
-
-client
-    - add withCredentials true to the axios request
-    - withCredentials to true ensures that request that is sent carries the token
-
-To set /clear cookies 
-    - res.cookies('token',token) - set the cookies
-    - res.clearCookie("token") - clear the cookie
-
-To read cookies
-    use cookie-parser middleware in the server
-    app.use(cookieParser())
-    req.cookies.token - read the token from the request cookies
-
-
- */
+  # Cookies
+    - Setup to send and receive cookies from the server to the client and vice versa.
+      1. Server
+        - Add credentials: true to the CORS configuration
+      2. Client
+        - Add withCredentials: true to the axios request
+    - To set/clear cookies:
+      - res.cookie('token', token): Set the cookie
+      - res.clearCookie('token'): Clear the cookie
+    - To access cookies:
+      - Use 'cookie-parser' middleware in the server
+        - app.use(cookieParser())
+        - req.cookies: Read the token from the request cookies
+*/

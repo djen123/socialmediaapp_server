@@ -1,44 +1,35 @@
-import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
+import jwt from 'jsonwebtoken'
+import dotenv from 'dotenv'
+dotenv.config()
 
-dotenv.config();
+const { JWT_SECRET } = process.env
 
-const { JWT_SECRET } = process.env;
-
-// Authenticate user using HTTP-only cookie
 export const isAuthenticated = (req, res, next) => {
   try {
-    const { token } = req.cookies;
-
-    if (!token) {
+    const { token } = req.cookies
+    if(!token) {
       return res.status(401).json({
-        message: "you are not logged in, please log in"
-      });
+        message: 'You are not logged in, please login first.'
+      })
     }
 
-    // Verify token
-    const user = jwt.verify(token, JWT_SECRET);
+    const user = jwt.verify(token, JWT_SECRET)
+    req.user = user
 
-    // Attach decoded user info to req
-    req.user = user;
-
-    next();
+    next()
   } catch (error) {
     return res.status(401).json({
-      message: "you are not logged in, login first"
-    });
+      message: 'You are not logged in, please login first.'
+    })
   }
-};
+}
 
-// Authorize user for protected routes
 export const isAuthorized = (req, res, next) => {
-  // Guard clause: block if user ID does not match route param
-  if (req.user._id !== req.params.id) {
+  if(req.user._id != req.params.id) {
     return res.status(403).json({
-      message: "not authorized"
-    });
+      message: 'You are not authorized to perform this action'
+    })
   }
 
-  next();
-};
-
+  next()
+}

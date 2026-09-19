@@ -1,72 +1,92 @@
-import Post from "../models/post.model.js";
-import User from "../models/user.model.js";
+import Post from '../models/post.model.js'
+import User from '../models/user.model.js'
 
 export const fetchPosts = async (req, res) => {
   try {
-    const { userId } = req.query;
-    const query = {};
+    const { userId } = req.query
 
-    if (userId) {
-      query.author = userId;
+    const query = {}
+    if(userId) {
+      query.author = userId
     }
 
-    const posts = await Post.find(query).populate("author", "name email avatar");
+    const posts = await Post.find(query).populate('author').sort({ createdAt: -1 })
 
-    return res.json({ posts });
-  } catch (e) {
-    return res.status(500).json({ status: "something wrong" });
+    res.json({ posts })
+  } catch (error) {
+    res.status(500).json({
+      message: 'Something went wrong'
+    })
   }
-};
+}
 
 export const fetchPost = async (req, res) => {
   try {
-    const post = await Post.findById(req.params.id).populate("author");
-    return res.json({ post });
-  } catch (e) {
-    return res.status(500).json({ status: "something wrong" });
+    const { id } = req.params
+    const post = await Post.findById(id).populate('author')
+
+    res.json({ post })
+  } catch (error) {
+    res.status(500).json({
+      message: 'Something went wrong'
+    })
   }
-};
+}
 
 export const createPost = async (req, res) => {
+    console.log("---- CREATE POST DEBUG ----");
+    console.log("COOKIES:", req.cookies);
+    console.log("USER:", req.user);
+    console.log("BODY:", req.body);
+    console.log("---------------------------");
   try {
-    const { content ,image} = req.body;
-    const { user } = req;
+    const { content, image } = req.body
+    const { user } = req
 
-    const newPost = await Post.create({
-      content,
-      image,
-      author: user._id
-    });
-
-    return res.status(201).json({
-      message: "post created",
-      post: newPost
-    });
+    await Post.create({ content, image, author: user._id })
+    res.json({
+      message: 'Post created successfully'
+    })
   } catch (error) {
-    return res.status(500).json({ status: "something wrong" });
+    if(error.name == 'ValidationError') {
+      const errorMessages = Object.values(error.errors).map(err => err.message)
+      return res.status(400).json({
+        message: 'Invalid input',
+        errors: errorMessages
+      })
+    }
+    
+    res.status(500).json({
+        message: 'Something went wrong'
+    })
   }
-};
+}
 
 export const updatePost = async (req, res) => {
   try {
-    const updatedPost = await Post.findByIdAndUpdate(
-      req.params.id,
-      { content: req.body.content },
-      {image:req.body.image},
-      { new: true }
-    );
-
-    return res.json({ message: "post updated", post: updatedPost });
-  } catch (e) {
-    return res.status(500).json({ status: "something wrong" });
+    const { id } = req.params
+    const { content, image } = req.body
+    await Post.findByIdAndUpdate(id, { content, image })
+    res.json({
+      message: 'Post updated successfully'
+    })
+  } catch (error) {
+    res.status(500).json({
+      message: 'Something went wrong'
+    })
   }
-};
+}
 
 export const deletePost = async (req, res) => {
   try {
-    await Post.findByIdAndDelete(req.params.id);
-    return res.json({ message: "post deleted" });
-  } catch (e) {
-    return res.status(500).json({ status: "something wrong" });
+    const { id } = req.params
+    await Post.findByIdAndDelete(id)
+    res.json({
+      message: 'Post deleted successfully'
+    })
+  } catch (error) {
+    res.status(500).json({
+      message: 'Something went wrong'
+    })
   }
-};
+}

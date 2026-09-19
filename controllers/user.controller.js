@@ -1,222 +1,303 @@
-import User from "../models/user.model.js";
-import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
+import User from '../models/user.model.js'
+import Experience from '../models/experience.model.js'
+import Education from '../models/education.model.js'
 
-dotenv.config();
+import bcrypt from 'bcrypt'
+import jwt from 'jsonwebtoken'
+import dotenv from 'dotenv'
+dotenv.config()
+const { JWT_SECRET } = process.env
+const JWT_EXPIRATION = 60*60
 
-const { JWT_SECRET, JWT_EXPIRE = 3600 } = process.env;
-
-// =========================
-// Fetch all users
-// =========================
 export const fetchUsers = async (req, res) => {
   try {
-    const users = await User.find();
-    res.json({ users });
-  } catch (e) {
-    res.status(500).json({ status: "something wrong" });
-  }
-};
+    const users = await User.find().select('-password')
 
-// =========================
-// Fetch single user
-// =========================
+    res.json({ users })
+  } catch (error) {
+    res.status(500).json({
+      message: 'Something went wrong'
+    })
+  }
+}
+
+export const fetchUserByUsername = async (req, res) => {
+  try {
+    const { username } = req.params
+    const user = await User.findOne({ username }).select('-password')
+
+    if(!user) {
+      return res.status(404).json({
+        message: 'User not found'
+      })
+    }
+
+    const experiences = await Experience.find({ user: user._id }).populate('company').sort({ startDate: -1 })
+    const education = await Education.find({ user: user._id }).populate('university').sort({ startDate: -1 })
+
+    let userProfile = {
+      ...user.toObject(),
+      education,
+      experiences,
+    }
+
+    res.json({ user: userProfile })
+  } catch (error) {
+    res.status(500).json({
+      message: 'Something went wrong'
+    })
+  }
+}
+
 export const fetchUser = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params
+    const user = await User.findById(id).select('-password')
 
-    const user = await User.findById(id);
-    if (!user) {
-      return res.status(404).json({ message: "user not found" });
+    if(!user) {
+      return res.status(404).json({
+        message: 'User not found'
+      })
     }
 
-    res.json({ user });
-  } catch (e) {
-    res.status(500).json({ status: "something wrong" });
-  }
-};
-
-// =========================
-// Update user
-// =========================
-export const updateUser = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, avatar } = req.body;
-
-    const updatedUser = await User.findByIdAndUpdate(
-      id,
-      { name, avatar },
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedUser) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    res.json({
-      message: "user updated",
-      data: updatedUser
-    });
-  } catch (e) {
+    res.json({ user })
+  } catch (error) {
     res.status(500).json({
-      status: "something wrong",
-      error: e.message
-    });
+      message: 'Something went wrong'
+    })
   }
-};
+}
 
-// =========================
-// Delete user
-// =========================
-export const deleteUser = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const deletedUser = await User.findByIdAndDelete(id);
-
-    res.json({
-      message: "user deleted",
-      data: deletedUser
-    });
-  } catch (e) {
-    res.status(500).json({
-      status: "something wrong",
-      error: e.message
-    });
-  }
-};
-
-// =========================
-// Signup user
-// =========================
 export const signupUser = async (req, res) => {
   try {
-    const { name, username, email, password, avatar } = req.body;
+    const { name, username, email, password, avatar } = req.body
 
-    // Guard clauses
-    if (!name || !username || !email || !password) {
-      return res.status(400).json({ message: "Missing required fields" });
-    }
+    const encryptedPassword = await bcrypt.hash(password, 10)
 
-    if (!JWT_SECRET) {
-      return res.status(500).json({ message: "JWT secret missing" });
-    }
+    const newUser = await User.create({ name, username, email, password: encryptedPassword, avatar })
 
-    const hashPassword = await bcrypt.hash(password, 10);
+    const { _id } = newUser
+    const token = jwt.sign({ _id, name, username, avatar }, JWT_SECRET, { expiresIn: JWT_EXPIRATION })
 
-    const newUser = await User.create({
-      name,
-      username,
-      email,
-      password: hashPassword,
-      avatar
-    });
-
-    const { _id } = newUser;
-
-    const token = jwt.sign(
-      { _id, name, username ,avatar},
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRE }
-    );
-
-    // Set cookie
-    res.cookie("token", token, {
+    res.cookie('token', token, {
       httpOnly: true,
-      maxAge: JWT_EXPIRE * 1000
-    });
-
+      maxAge: JWT_EXPIRATION * 1000,
+      sameSite: 'none',
+      secure: true
+    })
     res.status(201).json({
-      message: `@${username} registered`
-    });
-
-  } catch (e) {
-    console.log("SIGNUP ERROR:", e);
-
-    if (e.name === "MongoServerError" && e.code === 11000) {
-      const field = Object.keys(e.keyPattern)[0];
+      message: `@${username} registered successfully!`
+    })
+  } catch (error) {
+    console.log(error)
+    if (error.name === 'MongoServerError' && error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
       return res.status(400).json({
-        message: "Invalid input",
-        error: `A user with ${field} already exists`
-      });
+        message: 'Invalid input',
+        errors: `A user with that ${field} already exists`
+      })
     }
 
-    res.status(500).json({ status: "something wrong" });
+    if(error.name == 'ValidationError') {
+      const errorMessages = Object.values(error.errors).map(err => err.message)
+      return res.status(400).json({
+        message: 'Invalid input',
+        errors: errorMessages
+      })
+    }
+    
+    res.status(500).json({
+        message: 'Something went wrong'
+    })
   }
-};
+}
 
-// =========================
-// Login user
-// =========================
 export const loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body
 
-    // Guard clause
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password required" });
+    const user = await User.findOne({ email })
+    if(!user) {
+      return res.status(400).json({
+        message: 'Invalid credentials'
+      })
     }
 
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ message: "invalid credentials" });
+    const pwdMatched = await bcrypt.compare(password, user.password)
+    if(!pwdMatched) {
+      return res.status(400).json({
+        message: 'Invalid credentials'
+      })
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(400).json({ message: "invalid password" });
-    }
-
-    const { _id, name, username,avatar } = user;
-
-    if (!JWT_SECRET) {
-      return res.status(500).json({ message: "JWT secret missing" });
-    }
-    //attach avatar to token 
-    const token = jwt.sign(
-      { _id, name, username,avatar },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRE }
-    );
-
-   res.cookie("token", token, {
+    const { _id, name, username, avatar } = user
+    const token = jwt.sign({ _id, name, username, avatar }, JWT_SECRET, { expiresIn: JWT_EXPIRATION })
+    
+    res.cookie('token', token, {
       httpOnly: true,
-      secure: false,      // must be false on localhost
-      sameSite: "lax"
-    });
-
-    res.status(200).json({
-      message: `@${username} logged in successfully`
-    });
+      maxAge: JWT_EXPIRATION * 1000,
+      sameSite: 'none',
+      secure: true
+    })
+    res.json(
+      {
+      message: `@${username} logged in successfully!`
+      
+    })
 
   } catch (error) {
-    console.log("LOGIN ERROR:", error);
-    res.status(500).json({ status: "something wrong" });
-  }
-};
+    res.status(500).json({
+        message: 'Something went wrong'
 
-// =========================
-// Logout user
-// =========================
+    })
+  }
+}
+
 export const logoutUser = async (req, res) => {
   try {
-    res.clearCookie("token");
-    res.json({ message: "you have successfully logged out" });
-  } catch (e) {
-    res.status(500).json({ message: "something went wrong" });
+    res.clearCookie('token')
+
+    res.json({
+      message: 'You have successfully logged out!',
+    })
+  } catch (error) {
+    res.status(500).json({
+      message: 'Something went wrong'
+    })
   }
-};
+}
 
-// =========================
-// get current user
-// =========================
-
-export const getCurrentUser = async(req,res)=>{
+export const getCurrentUser = async (req, res) => {
   res.json({
-    user:req.user
+    user: req.user,
   })
 }
 
+export const updateUser = async (req, res) => {
+  try {
+    const { id } = req.params
 
+    const { name, bio, about, avatar, coverImage, location, skills } = req.body
+    await User.findByIdAndUpdate(id, { 
+      name, bio, about, avatar, coverImage, location, 
+      skills: skills.split(',').map(s => s.trim())
+    })
+    res.json({
+      message: 'User profile updated'
+    })
+  } catch (error) {
+    res.status(500).json({
+      message: 'Something went wrong'
+    })
+  }
+}
+
+export const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params
+    await User.findByIdAndDelete(id)
+    res.json({
+      message: 'User deleted',
+    })
+  } catch (error) {
+    res.status(500).json({
+      message: 'Something went wrong'
+    })
+  }
+}
+
+/* -- Experience Controllers -- */
+
+export const addExperience = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { title, company, startDate, endDate } = req.body
+
+    const newExperience = await Experience.create({ 
+      title, company, startDate, 
+      endDate: endDate || null,
+      user: id
+    })
+
+    const populatedDetails = await newExperience.populate('company')
+
+    res.status(201).json({
+      message: 'Experience added successfully!',
+      newExperience: populatedDetails
+    })
+  } catch (error) {
+    if(error.name == 'ValidationError') {
+      const errorMessages = Object.values(error.errors).map(err => err.message)
+      return res.status(400).json({
+        message: 'Invalid input',
+        errors: errorMessages
+      })
+    }
+    
+    res.status(500).json({
+        message: 'Something went wrong'
+    })
+  }
+}
+
+export const deleteExperience = async (req, res) => {
+  try {
+    const { id } = req.params
+    await Experience.findByIdAndDelete(experienceId)
+    res.json({
+      message: 'Experience deleted successfully',
+    })
+  } catch (error) {
+    res.status(500).json({
+      message: 'Something went wrong'
+    })
+  }
+}
+
+/* -- Education Controllers -- */
+
+export const addEducation = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { degree, university, startDate, endDate } = req.body
+
+    const newEducation = await Education.create({ 
+      degree, university, startDate, 
+      endDate: endDate || null,
+      user: id
+    })
+
+    const populatedDetails = await newEducation.populate('university')
+
+    res.status(201).json({
+      message: 'Education added successfully!',
+      newEducation: populatedDetails
+    })
+  } catch (error) {
+    if(error.name == 'ValidationError') {
+      const errorMessages = Object.values(error.errors).map(err => err.message)
+      return res.status(400).json({
+        message: 'Invalid input',
+        errors: errorMessages
+      })
+    }
+    
+    res.status(500).json({
+        message: 'Something went wrong'
+    })
+  }
+}
+
+export const deleteEducation = async (req, res) => {
+  try {
+    const { id } = req.params
+    await Education.findByIdAndDelete(educationId)
+    res.json({
+      message: 'Education deleted successfully',
+    })
+  } catch (error) {
+    res.status(500).json({
+      message: 'Something went wrong'
+    })
+  }
+}

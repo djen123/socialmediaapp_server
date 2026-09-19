@@ -1,141 +1,88 @@
- import Comment from "../models/comment.model.js"
- import Post from "../models/post.model.js"
-import User from "../models/user.model.js"
-
- 
-
+import Comment from '../models/comment.model.js'
+import Post from '../models/post.model.js'
+import User from '../models/user.model.js'
 
 export const fetchComments = async (req, res) => {
   try {
-    const { postId } = req.query;
+    const { postId } = req.query
 
-    if (!postId) {
+    if(!postId) {
       return res.status(400).json({
-        message: "please provide a postId as query parameter"
-      });
+        message: 'Please provide a postId as query parameter'
+      })
     }
 
-    const post = await Post.findById(postId)
-      .populate("author", "name email");
+    const comments = await Comment.find({ post: postId }).select('content author').populate('author')
 
-    if (!post) {
-      return res.status(404).json({
-        message: "Post not found"
-      });
-    }
-
-    const comments = await Comment.find({ post: postId })
-      .select("_id content author")
-      .populate("author", "name avatar");
-
-   ;
-
-    res.json({ comments });
-
-  } catch (e) {
+    res.json({ comments })
+  } catch (error) {
+    console.log(error)
     res.status(500).json({
-      status: "something wrong"
-    });
+      message: 'Something went wrong'
+    })
   }
-};
+}
 
+export const createComment = async (req, res) => {
+  try {
+    const { content, post } = req.body
+    const { user } = req
 
-export const createComment = async(req,res)=>{
-            //we take only content from the user to change not author
-        //we take author id only when its granted ,we take from token or middleware
-    try{
-        // get user post conetent and post for req.body
-        const {content,post} = req.body
-        // get user info from req from authenticated token
-        const   { user } = req
-        //check in the db
-        // const existingUser = await User.findById(user._id)
-         //check in the db
-        const existingPost = await Post.findById(post)
-        //if post does not exist then return error
-            if(!existingPost){
-
-            return res.status(404).json({
-            message:"post not found"
-        })
-        
-
+    const existingPost = await Post.findById(post)
+    if(!existingPost) {
+      return res.status(404).json({
+        message: 'Post not found'
+      })
     }
-    // if found then create new comment 
-        const newComment = await Comment.create({
-            content,author:user._id,post
-        })
 
-       return res.status(201).json({
-      message: `comment created`,
-      postId : newComment._id
-    });
-      
-
+    await Comment.create({ content, author: user._id, post })
+    res.json({
+      message: 'Comment added successfully'
+    })
+  } catch (error) {
+    if(error.name == 'ValidationError') {
+      const errorMessages = Object.values(error.errors).map(err => err.message)
+      return res.status(400).json({
+        message: 'Invalid input',
+        errors: errorMessages
+      })
     }
     
-    catch(e){
-        if(e.name === "MongoServerError" && e.code === 11000){
-            const field = Object.keys(e.keyPattern)[0];
-            return res.status(400).json({
-                message:"Invalid input",
-                error:` A user with ${field} exist`
-            })
-        }
-        
-        
-        res.status(500).json({
-            status:"something wrong"
-        })
-       
-    }
-
+    res.status(500).json({
+        message: 'Something went wrong'
+    })
+  }
 }
+
 export const updateComment = async (req, res) => {
-    try {
-        const { id} = req.params
-        
-        const { content } = req.body
+  try {
+    const { id } = req.params
+    const { content } = req.body
 
-        const updatedPost = await Post.findByIdAndUpdate(
-            id,
-            { content},
-            { new: true, runValidators: true }
-        )
+    await Comment.findByIdAndUpdate(id, { content })
 
-   
-
-        res.json({
-            message: "comment updated",
-            data: updatedPost
-        })
-
-    } catch (e) {
-        res.status(500).json({
-            status: "something wrong",
-            error: e.message
-        })
-    }
+    res.json({
+      message: `Comment updated successfully`
+    })
+  } catch (error) {
+    res.status(500).json({
+        message: 'Something went wrong'
+    })
+  }
 }
+
 export const deleteComment = async (req, res) => {
-    try {
-        const { id } = req.params
-    
+  try {
+    const { id } = req.params
 
-        const deleteComment = await Post.findByIdAndDelete(
-            id )
-        
-       
+    await Comment.findByIdAndDelete(id)
 
-        res.json({
-            message: "post deleted",
-            
-        })
-
-    } catch (e) {
-        res.status(500).json({
-            status: "something wrong",
-            error: e.message
-        })
-    }
+    res.json({
+      message: `Comment deleted successfully`
+    })
+  } catch (error) {
+    res.status(500).json({
+        message: 'Something went wrong'
+    })
+  }
 }
